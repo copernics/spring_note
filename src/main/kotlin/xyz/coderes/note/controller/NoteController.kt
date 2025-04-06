@@ -1,6 +1,7 @@
 package xyz.coderes.note.controller
 
 import org.bson.types.ObjectId
+import org.springframework.security.core.context.SecurityContextHolder
 import org.springframework.web.bind.annotation.*
 import xyz.coderes.note.database.model.Note
 import xyz.coderes.note.database.repository.NoteRepository
@@ -32,6 +33,7 @@ class NoteController(
     fun save(
         @RequestBody body: NoteRequest
     ): NoteResponse {
+        val ownerId = getRegisteredOwnerId()
         val note = noteRepository.save(
             Note(
                 id = body.id?.let { ObjectId(it) } ?: ObjectId.get(),
@@ -39,7 +41,7 @@ class NoteController(
                 content = body.content,
                 color = body.color,
                 createdAt = Instant.now(),
-                ownerId = ObjectId()
+                ownerId = ObjectId(ownerId)
             )
         )
 
@@ -55,16 +57,24 @@ class NoteController(
 
     @GetMapping("/owner/{ownerId}")
     fun getByOwnerId(
-        @RequestParam(required = true) ownerId: String
     ): List<NoteResponse> {
+        val ownerId = getRegisteredOwnerId()
         return noteRepository.findAllByOwnerId(ObjectId(ownerId)).map {
             it.toResponse()
         }
     }
 
+    private fun getRegisteredOwnerId(): String = SecurityContextHolder.getContext().authentication.principal as String
+
     @DeleteMapping(path = ["/{id}"])
     fun delete(@PathVariable id: String) {
-        noteRepository.deleteById(ObjectId(id))
+        val item =
+            noteRepository.findById(ObjectId(id))
+                .orElseThrow { throw IllegalArgumentException("Invalid Note Id:$id") }
+
+        if (item.ownerId.toHexString() != getRegisteredOwnerId()) {
+            noteRepository.deleteById(ObjectId(id))
+        }
     }
 
     private fun Note.toResponse() = NoteResponse(
