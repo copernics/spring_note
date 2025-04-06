@@ -48,14 +48,8 @@ class NoteController(
         return note.toResponse()
     }
 
-    @GetMapping
-    fun getAll(): List<NoteResponse> {
-        return noteRepository.findAll().map {
-            it.toResponse()
-        }
-    }
 
-    @GetMapping("/owner/{ownerId}")
+    @GetMapping
     fun getByOwnerId(
     ): List<NoteResponse> {
         val ownerId = getRegisteredOwnerId()
