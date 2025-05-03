@@ -1,9 +1,11 @@
 package xyz.coderes.note.database.security
 
 import org.bson.types.ObjectId
+import org.springframework.http.HttpStatusCode
 import org.springframework.security.authentication.BadCredentialsException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.web.server.ResponseStatusException
 import xyz.coderes.note.database.model.RefreshToken
 import xyz.coderes.note.database.model.User
 import xyz.coderes.note.database.repository.RefreshTokenRepository
@@ -31,10 +33,15 @@ class AuthService(
 
     fun login(email: String, password: String): TokenPair {
         val user = userRepository.findByEmail(email)
-            ?: throw BadCredentialsException("Invalid credentials.")
+            ?: throw ResponseStatusException(HttpStatusCode.valueOf(401), "Invalid credentials.")
+
         if (!hashEncoder.matches(password, user.hashedPassword)) {
             throw BadCredentialsException("Invalid credentials.")
         }
+        val newAccessToken = jwtService.toGenerateAccessToken(user.id.toHexString())
+        val newRefreshToken = jwtService.toGenerateRefreshToken(user.id.toHexString())
+
+        storeRefreshToken(user.id, newRefreshToken)
 
         val tokenPair = generateNewTokensAndStoreRefresh(user.id.toHexString())
 
@@ -56,16 +63,21 @@ class AuthService(
     @Transactional
     fun refreshToken(refreshToken: String): TokenPair {
         if (!jwtService.validateRefreshToken(refreshToken)) {
-            throw IllegalArgumentException("Invalid refresh token.")
+            throw ResponseStatusException(HttpStatusCode.valueOf(401), "Invalid refresh token.")
         }
         val userId = jwtService.getUserIdFromAccessToken(refreshToken)
         val user = userRepository.findById(ObjectId(userId))
-            .orElseThrow { IllegalArgumentException("Invalid refresh token.") }
+            .orElseThrow {
+                ResponseStatusException(HttpStatusCode.valueOf(401), "Invalid refresh token.")
+            }
 
         val hashToken = hashToken(refreshToken)
 
         refreshTokenRepository.findByUserIdAndHashedToken(user.id, hashToken)
-            ?: throw IllegalArgumentException("Invalid refresh token (maybe it has been expired).")
+            ?: throw ResponseStatusException(
+                HttpStatusCode.valueOf(401),
+                "Invalid refresh token (maybe it has been expired)."
+            )
 
         refreshTokenRepository.deleteByUserIdAndHashedToken(user.id, hashToken)
 
