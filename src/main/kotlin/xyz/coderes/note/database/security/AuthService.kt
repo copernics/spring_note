@@ -1,6 +1,7 @@
 package xyz.coderes.note.database.security
 
 import org.bson.types.ObjectId
+import org.springframework.http.HttpStatus
 import org.springframework.http.HttpStatusCode
 import org.springframework.security.authentication.BadCredentialsException
 import org.springframework.stereotype.Service
@@ -22,6 +23,10 @@ class AuthService(
     private val refreshTokenRepository: RefreshTokenRepository
 ) {
     fun registerUser(email: String, password: String): User {
+        val user = userRepository.findByEmail(email.trim())
+        if(user!=null) {
+            throw ResponseStatusException(HttpStatus.CONFLICT,"An user with that email already exists.")
+        }
         return userRepository.save(
             User(
                 email = email,

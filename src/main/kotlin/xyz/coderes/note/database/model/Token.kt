@@ -12,5 +12,4 @@ data class RefreshToken(
     @Indexed(expireAfter = "0s")
     val expiryDate: Instant,
     val createdDate: Instant = Instant.now(),
-
 )
